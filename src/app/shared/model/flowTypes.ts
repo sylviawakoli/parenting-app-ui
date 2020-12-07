@@ -1,8 +1,22 @@
+/* tslint:disable:class-name */
 import { RapidProFlowExport } from "src/app/feature/chat/models";
 export { RapidProFlowExport } from "src/app/feature/chat/models";
+import { TipRow } from "src/app/feature/toolbox/models/toolbox.model";
+
+/*********************************************************************************************
+ *  Base flow types
+ ********************************************************************************************/
 
 export namespace FlowTypes {
-  export type FlowType = "completions" | "conversation" | "goals" | "reminders" | "tasks" | "tips";
+  export type FlowType =
+    | "completions"
+    | "conversation"
+    | "goals"
+    | "reminders"
+    | "tasks"
+    | "tips"
+    | "module_list"
+    | "module_page";
 
   // NOTE - most of these types are duplicated in src/data, should eventually refactor to common libs
 
@@ -20,7 +34,7 @@ export namespace FlowTypes {
    * and data corresponding to spreadsheet rows
    */
   export interface FlowTypeWithData extends FlowTypeBase {
-    /** Specific flow data rows */
+    /** Specific flow data rows - these are usually defined from within specific flow type row typings */
     rows: any[];
   }
 
@@ -34,23 +48,57 @@ export namespace FlowTypes {
   export interface Tasks extends FlowTypeWithData {}
   export interface Tips extends FlowTypeWithData {
     title: string;
+    rows: TipRow[];
+  }
+  export interface Module_list extends FlowTypeWithData {
+    flow_type: "module_list";
+    rows: Module_listRow[];
+  }
+  export interface Module_page extends FlowTypeWithData {
+    flow_type: "module_page";
+    rows: Module_pageRow[];
   }
 
   export interface Conversation extends RapidProFlowExport.RootObject {}
-  
+
+  /*********************************************************************************************
+   *  Specific flow row types
+   ********************************************************************************************/
+
+  export interface Module_listRow {
+    module_number: number;
+    id: string;
+    title: string;
+    description: string;
+    module_page: string;
+    icon?: string;
+    main_image?: string;
+  }
+  export interface Module_pageRow {
+    row_id?: string | number;
+    type:
+      | "main_image"
+      | "title"
+      | "button"
+      | "description"
+      | "step_group"
+      | "step_intro"
+      | "step_item";
+    text?: string;
+    media?: string;
+    task_id?: string;
+    /** Some groups may recursively nest other row objects */
+    rows?: Module_pageRow[];
+  }
+
   // To Sort - possibly these typings affect the input and not the output???
 
-  // flow_type: "conversation";
-  // campaigns: any[];
-  // fields: any[];
-  // character?: "friend" | "guide";
-  // second_character?: string;
-  // entry_condition?: string;
-  // output?: string;
-  // comment_suggestion?: string;
-  // topic_id?: string;
-  // rows: ConversationRow[];
-
+  /** Format of conversation rows prior to processing */
+  export interface ConversationSheet extends FlowTypeWithData {
+    flow_type: "conversation";
+    rows: ConversationRow[];
+  }
+  /** Format of conversation rows post processing */
   export interface ConversationRow {
     row_id?: string | number;
     type: "start_new_flow" | "send_message" | "story_message" | "go_to" | "save_value" | "exit";
