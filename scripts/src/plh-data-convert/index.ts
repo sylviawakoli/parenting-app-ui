@@ -3,13 +3,22 @@ import * as xlsx from "xlsx";
 import * as path from "path";
 import chalk from "chalk";
 import { ConversationParser, DefaultParser } from "./parsers";
-import { groupJsonByKey, recursiveFindByExtension, capitalizeFirstLetter } from "../utils";
+import {
+  groupJsonByKey,
+  recursiveFindByExtension,
+  capitalizeFirstLetter,
+  arrayToHashmap,
+} from "../utils";
 import { FlowTypes } from "../../types";
 import { AbstractParser } from "./parsers/abstract.parser";
+import { TaskListParser } from "./parsers/task_list/task_list.parser";
 
 const INPUT_FOLDER = path.join(__dirname, "../gdrive-download/output");
 const INTERMEDIATES_FOLDER = `${__dirname}/intermediates`;
 const OUTPUT_FOLDER = `${__dirname}/output`;
+
+// TODO - make it easier to set this in dotenv or cli
+const DEPLOY_TARGET: "app" | "rapidpro" = "app";
 
 /**
  * Reads xlsx files from gdrive-download output and converts to json
@@ -18,6 +27,8 @@ const OUTPUT_FOLDER = `${__dirname}/output`;
 async function main() {
   console.log(chalk.yellow("Converting PLH Data"));
   fs.ensureDirSync(INPUT_FOLDER);
+  fs.ensureDirSync(INTERMEDIATES_FOLDER);
+  fs.emptyDirSync(INTERMEDIATES_FOLDER);
   fs.ensureDirSync(OUTPUT_FOLDER);
   fs.emptyDirSync(OUTPUT_FOLDER);
   const xlsxFiles = listFilesForConversion(INPUT_FOLDER);
@@ -27,14 +38,19 @@ async function main() {
     const json = convertXLSXSheetsToJson(xlsxPath);
     combined.push({ json, xlsxPath });
   }
-  // merge and collage plh data
+  // merge and collage plh data, write some extra files for logging/debugging purposes
   const merged = mergePLHData(combined);
-  const dataByFlowType = groupJsonByKey(merged, "flow_type");
-  const convertedData = applyDataParsers(dataByFlowType as any);
-  // write some extra files for logging/debugging purposes
   fs.writeFileSync(`${INTERMEDIATES_FOLDER}/merged.json`, JSON.stringify(merged, null, 2));
-  fs.writeFileSync(`${INTERMEDIATES_FOLDER}/dataByFlowType.json`, JSON.stringify(merged, null, 2));
-  fs.writeFileSync(`${INTERMEDIATES_FOLDER}/convertedData.json`, JSON.stringify(merged, null, 2));
+  const dataByFlowType = groupJsonByKey(merged, "flow_type");
+  fs.writeFileSync(
+    `${INTERMEDIATES_FOLDER}/dataByFlowType.json`,
+    JSON.stringify(dataByFlowType, null, 2)
+  );
+  const convertedData = applyDataParsers(dataByFlowType as any);
+  fs.writeFileSync(
+    `${INTERMEDIATES_FOLDER}/convertedData.json`,
+    JSON.stringify(convertedData, null, 2)
+  );
   // write to output files
   Object.entries(convertedData).forEach(([key, value]) => {
     const outputJson = JSON.stringify(value, null, 2);
@@ -53,27 +69,29 @@ main()
 function applyDataParsers(
   dataByFlowType: { [type in FlowTypes.FlowType]: FlowTypes.FlowTypeWithData[] }
 ) {
-  const parsers: { [flowType in FlowTypes.FlowType]?: AbstractParser } = {
+  // All flow types will be processed by the default parser unless otherwise specified here
+
+  // generate a list of all tasks required by the taskListParser (merging rows from all task_list types)
+  const allTasksById = arrayToHashmap(
+    dataByFlowType.task_list.reduce((a, b) => [...a, ...b.rows], []),
+    "id"
+  );
+  const customParsers: { [flowType in FlowTypes.FlowType]?: AbstractParser } = {
     conversation: new ConversationParser(),
-    module_page: new DefaultParser(),
-    tips: new DefaultParser(),
+    task_list: new TaskListParser(dataByFlowType, allTasksById),
   };
-  console.log(chalk.blue(`Parsers applied to flow_types: ${Object.keys(parsers).join(", ")}`));
   const parsedData = {};
   Object.entries(dataByFlowType).forEach(([key, contentFlows]) => {
-    if (parsers.hasOwnProperty(key)) {
-      // add intermediate parsed flow for logging/debugging
-      fs.ensureDir(`${INTERMEDIATES_FOLDER}/${key}`);
-      // parse all flows through the parser
-      parsedData[key] = contentFlows.map((flow) => {
-        const parsed = parsers[key].run(flow);
-        const INTERMEDIATE_PATH = `${INTERMEDIATES_FOLDER}/${key}/${flow.flow_name}.json`;
-        fs.writeFileSync(INTERMEDIATE_PATH, JSON.stringify(parsed, null, 2));
-        return parsed;
-      });
-    } else {
-      parsedData[key] = contentFlows;
-    }
+    const parser = customParsers[key] ? customParsers[key] : new DefaultParser();
+    // add intermediate parsed flow for logging/debugging
+    fs.ensureDirSync(`${INTERMEDIATES_FOLDER}/${key}`);
+    // parse all flows through the parser
+    parsedData[key] = contentFlows.map((flow) => {
+      const parsed = parser.run(flow);
+      const INTERMEDIATE_PATH = `${INTERMEDIATES_FOLDER}/${key}/${flow.flow_name}.json`;
+      fs.writeFileSync(INTERMEDIATE_PATH, JSON.stringify(parsed, null, 2));
+      return parsed;
+    });
   });
   return parsedData;
 }
