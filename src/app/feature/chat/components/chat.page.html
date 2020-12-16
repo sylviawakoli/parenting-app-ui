@@ -37,7 +37,10 @@
           >
           <path d="M15 20V0L0 10L15 20Z" fill="grey" />
           </svg>
-          <div class="msg-bubble">{{msg.text}}</div>
+          <div class="msg-bubble">
+            <div *ngIf="!msg.hideText">{{msg.text}}</div>
+            <img *ngIf="msg.innerImageUrl" [src]="msg.innerImageUrl">
+          </div>
           <svg
             *ngIf="msg.sender === 'user'"
             class="user-msg-triangle" 
@@ -67,6 +70,7 @@
     *ngIf="lastReceivedMsg"
     [responseOptions]="lastReceivedMsg?.responseOptions"
     (onOptionSelect)="selectResponseOption($event)"
+    [message]="lastReceivedMsg"
   ></plh-chat-responses>
   <!-- <ion-button *ngIf="showFlowSkip" class="skip-button" (click)="skipFlow()">Skip</ion-button> -->
 </div>
