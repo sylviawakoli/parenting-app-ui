@@ -1,17 +1,18 @@
 import { NgModule } from "@angular/core";
 import { PreloadAllModules, RouterModule, Routes } from "@angular/router";
 import { ThemeEditorComponent } from "src/app/feature/theme/theme-editor/theme-editor.component";
+import { TourComponent } from "./feature/tour/tour.component";
 
 const FeatureRoutes: Routes = [
   {
     path: "",
-    redirectTo: "module_list",
+    redirectTo: "home",
     pathMatch: "full",
   },
   {
     path: "home",
-    redirectTo: "module_list",
-    pathMatch: "full",
+    loadChildren: () =>
+      import("./feature/home/home.module").then((m) => m.HomePageModule),
   },
   {
     path: "module_list",
@@ -52,6 +53,10 @@ const FeatureRoutes: Routes = [
   {
     path: "theme-editor",
     component: ThemeEditorComponent,
+  },
+  {
+    path: "tour/:tourName",
+    component: TourComponent
   },
   /*****************************************************************************************
    * Legacy paths - these should be removed in the future once modules refactored
